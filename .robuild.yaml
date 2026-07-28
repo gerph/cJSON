@@ -1,0 +1,60 @@
+%YAML 1.0
+---
+
+# RISC OS build file to execute on https://build.riscos.online/
+
+# Source is optional (NYI), and should be a URL to source the content from
+#source: <url>
+
+# Defines a list of jobs which will be performed.
+# Only 1 job will currently be executed.
+jobs:
+  build:
+    # Env defines system variables which will be used within the environment.
+    # Multiple variables may be assigned.
+    env:
+      "Sys$Environment": ROBuild
+      "BUILD32": 1
+
+      # Faster building using the host toolchain
+      "Alias$AMU": "HostAMU %*0"
+
+    # Build from the RISC OS port directory.
+    dir: riscos
+
+    # Commands which should be executed to perform the build.
+    # The build will terminate if any command returns a non-0 return code or an error.
+    script:
+      - echo
+      - echo *** Export the cJSON library ***
+      - amu export
+
+      - echo
+      - echo *** Build and run the test program ***
+      - amu -f MakefileTest
+      - aif32.cJSON_test
+
+      - echo
+      - echo *** Collect the complete exported library tree ***
+      - cdir Artifacts
+      - cdir Artifacts.Lib
+      - cdir Artifacts.Lib.cJSON
+      - cdir Artifacts.Lib.cJSON.h
+      - cdir Artifacts.Lib.cJSON.o
+      - copy h.cJSON Artifacts.Lib.cJSON.h.cJSON ~CF~V
+      - copy o.libcJSON Artifacts.Lib.cJSON.o.libcJSON ~CF~V
+      - copy o32.libcJSON Artifacts.Lib.cJSON.o.libcJSON-32 ~CF~V
+      - copy oz.libcJSON Artifacts.Lib.cJSON.o.libcJSONzm ~CF~V
+      - copy oz32.libcJSON Artifacts.Lib.cJSON.o.libcJSONzm-32 ~CF~V
+
+      # Done!
+      - echo
+      - echo *** SUCCESS ***
+
+    # Outputs from the build are defined in artifacts
+    # These are a list of artifacts to report directories or files.
+    # Only a single item is currently supported.
+    artifacts:
+      # Each element of the artifacts should have a path key, which gives the file or
+      # directory to return.
+      - path: riscos/Artifacts
