@@ -63,22 +63,71 @@ jobs:
           name: cJSON-riscos-library
           path: ${{ steps.version.outputs.leafname }}
 
+  build-riscos64:
+    runs-on: ubuntu-latest
+    container:
+      image: gerph/riscos-build:latest-64bit
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: RISC OS 64 build
+        run: |
+          cd riscos
+          riscos-amu BUILD64=1
+          riscos-amu BUILD64=1 export
+
+      - name: Create archive of 64-bit exports
+        run: |
+          mkdir -p Artifacts/Lib
+          cp -R "$BUILD_DIR/Export/Lib/$COMPONENT_NAME" "Artifacts/Lib/$COMPONENT_NAME"
+          cd Artifacts
+          riscos-zip ../$COMPONENT_NAME-riscos64.zip *
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cJSON-riscos64-library
+          path: ${{ env.COMPONENT_NAME }}-riscos64.zip
+
   release:
-    needs: build-riscos
+    needs: [build-riscos, build-riscos64]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    container:
+      image: gerph/riscos-build:latest-64bit
     permissions:
       contents: write
+
     steps:
-      - name: Download exported RISC OS library
+      - name: Download exported 32-bit RISC OS library
         uses: actions/download-artifact@v8
         with:
           name: cJSON-riscos-library
+
+      - name: Download exported 64-bit RISC OS library
+        uses: actions/download-artifact@v8
+        with:
+          name: cJSON-riscos64-library
+
+      - name: Combine the RISC OS library exports for release
+        id: package
+        run: |
+          leafname="${{ needs.build-riscos.outputs.leafname }}"
+          mkdir -p Artifacts
+          riscos-unzip -C Artifacts "$leafname"
+          riscos-unzip -C Artifacts "$COMPONENT_NAME-riscos64.zip"
+          (
+            cd Artifacts
+            riscos-zip "../$leafname" *
+          )
+          riscos-unzip -l "$leafname"
+          echo "leafname=$leafname" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           prerelease: false
           draft: true
-          artifacts: "${{ needs.build-riscos.outputs.leafname }}"
+          artifacts: "${{ steps.package.outputs.leafname }}"
           artifactContentType: application/zip
